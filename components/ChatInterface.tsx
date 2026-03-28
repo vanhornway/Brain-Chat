@@ -33,6 +33,13 @@ interface ToolInvocation {
 // Shortcuts: pre-built prompts the user can fire with one tap
 const SHORTCUTS = [
   {
+    id: "capture-thought",
+    label: "Capture a Thought",
+    icon: "💭",
+    prompt: "",
+    isThought: true,
+  },
+  {
     id: "hike-image",
     label: "Hike Summary Image",
     icon: "🏔",
@@ -178,8 +185,18 @@ export default function ChatInterface() {
     }
   }
 
-  function handleShortcut(prompt: string) {
+  function handleShortcut(prompt: string, isThought?: boolean) {
     setShowShortcuts(false);
+    if (isThought) {
+      setInput("");
+      setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.placeholder = "Type your thought and send...";
+          inputRef.current.focus();
+        }
+      }, 50);
+      return;
+    }
     setInput(prompt);
     setTimeout(() => inputRef.current?.focus(), 50);
   }
@@ -504,7 +521,7 @@ export default function ChatInterface() {
               {SHORTCUTS.map((s) => (
                 <button
                   key={s.id}
-                  onClick={() => handleShortcut(s.prompt)}
+                  onClick={() => handleShortcut(s.prompt, (s as { isThought?: boolean }).isThought)}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl bg-surface-2 border border-border hover:bg-surface-3 hover:border-accent-light/30 transition-colors text-left"
                 >
                   <span className="text-xl">{s.icon}</span>

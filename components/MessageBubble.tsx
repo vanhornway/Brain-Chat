@@ -16,6 +16,9 @@ interface MessageBubbleProps {
   content: string;
   toolInvocations?: ToolInvocation[];
   isStreaming?: boolean;
+  onGenerateImage?: () => void;
+  isGeneratingImage?: boolean;
+  generatedImageBase64?: string;
 }
 
 function ToolPill({
@@ -50,6 +53,8 @@ function ToolPill({
       ? "Queried"
       : invocation.toolName === "search_table"
       ? "Searched"
+      : invocation.toolName === "insert_row"
+      ? "Inserted"
       : "Aggregated";
 
   return (
@@ -64,24 +69,9 @@ function ToolPill({
             : "bg-surface-3 text-text-muted border border-border animate-pulse"
         }`}
       >
-        {/* Icon */}
         {invocation.state !== "result" ? (
-          <svg
-            className="animate-spin"
-            width="10"
-            height="10"
-            viewBox="0 0 24 24"
-            fill="none"
-          >
-            <circle
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              strokeWidth="3"
-              strokeLinecap="round"
-              strokeDasharray="40 20"
-            />
+          <svg className="animate-spin" width="10" height="10" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeDasharray="40 20" />
           </svg>
         ) : isError ? (
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none">
@@ -90,13 +80,7 @@ function ToolPill({
           </svg>
         ) : (
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none">
-            <path
-              d="M20 6L9 17l-5-5"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
+            <path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         )}
 
@@ -108,21 +92,11 @@ function ToolPill({
           {isError && <span className="text-red-400/70"> · error</span>}
         </span>
 
-        {/* Expand chevron */}
         <svg
           className={`transition-transform ${expanded ? "rotate-180" : ""}`}
-          width="10"
-          height="10"
-          viewBox="0 0 24 24"
-          fill="none"
+          width="10" height="10" viewBox="0 0 24 24" fill="none"
         >
-          <path
-            d="M6 9l6 6 6-6"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
+          <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>
 
@@ -151,15 +125,16 @@ export default function MessageBubble({
   content,
   toolInvocations,
   isStreaming,
+  onGenerateImage,
+  isGeneratingImage,
+  generatedImageBase64,
 }: MessageBubbleProps) {
   const isUser = role === "user";
 
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"} mb-3 px-3`}>
-      <div
-        className={`max-w-[88%] ${isUser ? "max-w-[78%]" : "max-w-[92%]"}`}
-      >
-        {/* Tool pills — shown above assistant messages */}
+      <div className={`${isUser ? "max-w-[78%]" : "max-w-[92%]"} w-full`}>
+        {/* Tool pills */}
         {!isUser && toolInvocations && toolInvocations.length > 0 && (
           <div className="mb-2 ml-1">
             {toolInvocations.map((inv) => (
@@ -178,31 +153,19 @@ export default function MessageBubble({
             }`}
           >
             {isUser ? (
-              <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                {content}
-              </p>
+              <p className="text-sm leading-relaxed whitespace-pre-wrap">{content}</p>
             ) : (
               <div className="text-sm leading-relaxed prose-dark">
                 {isStreaming && !content ? (
                   <div className="dot-pulse flex gap-1 items-center py-1">
-                    <span />
-                    <span />
-                    <span />
+                    <span /><span /><span />
                   </div>
                 ) : (
                   <ReactMarkdown
                     components={{
-                      // Open links in new tab
                       a: ({ href, children }) => (
-                        <a
-                          href={href}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          {children}
-                        </a>
+                        <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>
                       ),
-                      // Prevent nesting issues
                       p: ({ children }) => <p>{children}</p>,
                     }}
                   >
@@ -211,6 +174,52 @@ export default function MessageBubble({
                 )}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Generate Image button — only on non-empty assistant messages */}
+        {!isUser && content && !isStreaming && onGenerateImage && (
+          <div className="mt-1.5 ml-1">
+            <button
+              onClick={onGenerateImage}
+              disabled={isGeneratingImage}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-surface-2 border border-border text-text-muted hover:text-amber-300 hover:border-amber-600/40 hover:bg-amber-950/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isGeneratingImage ? (
+                <svg className="animate-spin" width="10" height="10" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeDasharray="45 25" />
+                </svg>
+              ) : (
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none">
+                  <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="2" />
+                  <circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" />
+                  <path d="M21 15l-5-5L5 21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
+              {isGeneratingImage ? "Generating image..." : "Generate Image"}
+            </button>
+          </div>
+        )}
+
+        {/* Generated image display */}
+        {generatedImageBase64 && (
+          <div className="mt-2 ml-1">
+            <img
+              src={`data:image/png;base64,${generatedImageBase64}`}
+              alt="AI generated image"
+              className="rounded-2xl max-w-full border border-border shadow-lg"
+              style={{ maxHeight: "70vh" }}
+            />
+            <a
+              href={`data:image/png;base64,${generatedImageBase64}`}
+              download="brain-image.png"
+              className="mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-surface-2 border border-border text-text-muted hover:text-text-primary hover:bg-surface-3 transition-colors"
+            >
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none">
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              Download
+            </a>
           </div>
         )}
       </div>

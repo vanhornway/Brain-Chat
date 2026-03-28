@@ -61,6 +61,7 @@ export const KNOWN_TABLES = [
   "rental_expenses",
   "rental_income",
   "prompt_templates",
+  "chat_sessions",
 ] as const;
 
 export type KnownTable = (typeof KNOWN_TABLES)[number];
@@ -101,6 +102,7 @@ export const DATE_COLUMNS: Record<string, string[]> = {
   rental_expenses:      ["expense_date", "created_at"],
   rental_income:        ["received_date", "created_at"],
   prompt_templates:     ["updated_at", "created_at"],
+  chat_sessions:        ["updated_at", "created_at"],
 };
 
 // Key columns per table — helps the AI know what to filter/display
@@ -137,4 +139,5 @@ export const TABLE_SCHEMA: Record<string, string> = {
   rental_expenses:       "id, property, expense_date, category, amount, vendor, description, is_tax_deductible, tax_year, receipt_url, notes",
   rental_income:         "id, property, received_date, amount, income_type, tenant, tax_year, notes",
   prompt_templates:      "id, template_id, title, description, output_type, template_body, variables, example_call, tags, created_at, updated_at",
+  chat_sessions:         "id, title, messages, provider, model_id, created_at, updated_at",
 };

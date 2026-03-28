@@ -1,0 +1,194 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #0a0a0f;
+  --surface: #13131a;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  background-color: #0a0a0f;
+  color: #f0f0f5;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #2a2a3a;
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3a3a50;
+}
+
+/* Smooth scrolling */
+.scroll-smooth {
+  scroll-behavior: smooth;
+}
+
+/* Markdown inside messages */
+.prose-dark h1,
+.prose-dark h2,
+.prose-dark h3 {
+  color: #f0f0f5;
+  font-weight: 600;
+  margin-top: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.prose-dark h1 { font-size: 1.15rem; }
+.prose-dark h2 { font-size: 1.05rem; }
+.prose-dark h3 { font-size: 0.95rem; }
+
+.prose-dark p {
+  margin-bottom: 0.5rem;
+  line-height: 1.6;
+}
+
+.prose-dark p:last-child {
+  margin-bottom: 0;
+}
+
+.prose-dark ul,
+.prose-dark ol {
+  margin-left: 1.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.prose-dark li {
+  margin-bottom: 0.2rem;
+  line-height: 1.5;
+}
+
+.prose-dark strong {
+  color: #e0e0f0;
+  font-weight: 600;
+}
+
+.prose-dark em {
+  color: #c0c0dd;
+}
+
+.prose-dark code {
+  background: #1c1c2e;
+  border: 1px solid #2a2a3a;
+  border-radius: 4px;
+  padding: 0.1rem 0.35rem;
+  font-size: 0.8rem;
+  font-family: "SF Mono", "Fira Code", monospace;
+  color: #a78bfa;
+}
+
+.prose-dark pre {
+  background: #0f0f1a;
+  border: 1px solid #2a2a3a;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  overflow-x: auto;
+  margin-bottom: 0.5rem;
+}
+
+.prose-dark pre code {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: #c4b5fd;
+  font-size: 0.78rem;
+}
+
+.prose-dark table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  margin-bottom: 0.5rem;
+  overflow-x: auto;
+  display: block;
+}
+
+.prose-dark th {
+  background: #1c1c26;
+  color: #a78bfa;
+  font-weight: 600;
+  text-align: left;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #2a2a3a;
+}
+
+.prose-dark td {
+  padding: 0.35rem 0.6rem;
+  border: 1px solid #2a2a3a;
+  color: #d0d0e8;
+}
+
+.prose-dark tr:nth-child(even) td {
+  background: #13131e;
+}
+
+.prose-dark blockquote {
+  border-left: 3px solid #7c3aed;
+  padding-left: 0.75rem;
+  color: #9090b0;
+  margin-bottom: 0.5rem;
+}
+
+.prose-dark a {
+  color: #8b5cf6;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Pulse animation for loading dots */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+.dot-pulse span {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background: #8b5cf6;
+  border-radius: 50%;
+  animation: pulse-dot 1.2s ease-in-out infinite;
+}
+
+.dot-pulse span:nth-child(2) { animation-delay: 0.2s; }
+.dot-pulse span:nth-child(3) { animation-delay: 0.4s; }
+
+/* Slide-up animation for settings panel */
+@keyframes slide-up {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.slide-up {
+  animation: slide-up 0.25s ease-out;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.fade-in {
+  animation: fade-in 0.2s ease-out;
+}

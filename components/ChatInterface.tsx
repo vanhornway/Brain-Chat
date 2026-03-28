@@ -2,9 +2,16 @@
 
 import { useChat } from "ai/react";
 import { useEffect, useRef, useState, useCallback } from "react";
+import Image from "next/image";
 import MessageBubble from "./MessageBubble";
 import SettingsPanel from "./SettingsPanel";
 import { loadSettings, ChatSettings } from "@/lib/providers";
+
+interface PendingImage {
+  url: string;
+  name: string;
+  contentType: string;
+}
 
 const WELCOME_MESSAGE = `Hi! I'm your personal AI assistant. I have access to your life database — ask me about:
 
@@ -28,8 +35,10 @@ export default function ChatInterface() {
   const [settings, setSettings] = useState<ChatSettings>(() => loadSettings());
   const [showSettings, setShowSettings] = useState(false);
   const [hasKey, setHasKey] = useState(false);
+  const [pendingImage, setPendingImage] = useState<PendingImage | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -64,26 +73,38 @@ export default function ChatInterface() {
     el.style.height = Math.min(el.scrollHeight, maxH) + "px";
   }
 
+  function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setPendingImage({ url: reader.result as string, name: file.name, contentType: file.type });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  }
+
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      if (input.trim() && !isLoading && hasKey) {
-        handleSubmit(e as unknown as React.FormEvent<HTMLFormElement>);
-        // Reset height
-        if (inputRef.current) {
-          inputRef.current.style.height = "auto";
-        }
+      if ((input.trim() || pendingImage) && !isLoading && hasKey) {
+        handleSubmit(e as unknown as React.FormEvent<HTMLFormElement>, {
+          experimental_attachments: pendingImage ? [pendingImage] : undefined,
+        });
+        setPendingImage(null);
+        if (inputRef.current) inputRef.current.style.height = "auto";
       }
     }
   }
 
   function handleFormSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (input.trim() && !isLoading && hasKey) {
-      handleSubmit(e);
-      if (inputRef.current) {
-        inputRef.current.style.height = "auto";
-      }
+    if ((input.trim() || pendingImage) && !isLoading && hasKey) {
+      handleSubmit(e, {
+        experimental_attachments: pendingImage ? [pendingImage] : undefined,
+      });
+      setPendingImage(null);
+      if (inputRef.current) inputRef.current.style.height = "auto";
     }
   }
 
@@ -260,7 +281,56 @@ export default function ChatInterface() {
             </button>
           </div>
         )}
+        {/* Image preview */}
+        {pendingImage && (
+          <div className="mb-2 flex items-center gap-2">
+            <div className="relative">
+              <Image
+                src={pendingImage.url}
+                alt="Attachment preview"
+                width={64}
+                height={64}
+                className="w-16 h-16 rounded-xl object-cover border border-border"
+              />
+              <button
+                type="button"
+                onClick={() => setPendingImage(null)}
+                className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-surface-3 border border-border rounded-full flex items-center justify-center text-text-muted hover:text-text-primary"
+              >
+                <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
+                  <path d="M1 1l8 8M9 1L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+              </button>
+            </div>
+            <p className="text-xs text-text-muted">Image attached — describe what to do with it or just send</p>
+          </div>
+        )}
+
         <form onSubmit={handleFormSubmit} className="flex items-end gap-2">
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={handleImageSelect}
+          />
+
+          {/* Camera button */}
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={!hasKey || isLoading}
+            className="flex-none w-11 h-11 flex items-center justify-center rounded-2xl bg-surface-2 border border-border text-text-secondary hover:text-text-primary hover:bg-surface-3 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            aria-label="Attach image"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <circle cx="12" cy="13" r="4" stroke="currentColor" strokeWidth="2"/>
+            </svg>
+          </button>
+
           <div className="flex-1 relative">
             <textarea
               ref={inputRef}
@@ -284,9 +354,9 @@ export default function ChatInterface() {
 
           <button
             type="submit"
-            disabled={!input.trim() || !hasKey || isLoading}
+            disabled={(!input.trim() && !pendingImage) || !hasKey || isLoading}
             className={`flex-none w-11 h-11 flex items-center justify-center rounded-2xl transition-all ${
-              input.trim() && hasKey && !isLoading
+              (input.trim() || pendingImage) && hasKey && !isLoading
                 ? "bg-accent text-white shadow-lg shadow-accent/30 active:scale-95"
                 : "bg-surface-2 text-text-muted cursor-not-allowed"
             }`}

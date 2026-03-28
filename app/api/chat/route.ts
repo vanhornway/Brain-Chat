@@ -66,6 +66,15 @@ IMPORTANT RULES:
 - For filters, only use columns that exist in that table's schema above.
 - If unsure which table to query, try the most likely one — the tool will return an error if wrong.
 
+IMAGE / OCR RULES:
+- When the user attaches an image, analyze it carefully and extract all relevant data.
+- Identify which table(s) the data belongs to based on content (e.g. CGM screenshot → blood_glucose, lab report → lab_results, weight scale → weight_log).
+- Use insert_row to save the extracted data. Confirm what you inserted after success.
+- If the image contains multiple readings, insert each as a separate row.
+- For blood_glucose: use subject="Umair", reading_type based on context (fasting/post-meal/random).
+- For weight_log: use subject="Umair".
+- For lab_results: use subject="Umair", set is_flagged=true if value is outside reference range.
+
 When answering questions, always query the relevant tables first.
 For trend/inference questions, pull enough data to give a meaningful analysis.
 Be concise but insightful. Format numbers clearly. Use markdown for lists and tables.
@@ -290,6 +299,43 @@ export async function POST(req: Request) {
               table,
               column,
               query,
+            };
+          }
+        },
+      }),
+
+      insert_row: tool({
+        description:
+          "Insert a new row into a Supabase table. Use this to log data extracted from images (CGM screenshots, lab reports, weight scales, receipts) or when the user asks to record/log something new.",
+        parameters: z.object({
+          table: z.string().describe("The table name to insert into."),
+          data: z
+            .record(z.string(), z.unknown())
+            .describe(
+              "Key-value pairs for the new row. Only include columns that exist in the table schema."
+            ),
+        }),
+        execute: async ({ table, data }) => {
+          try {
+            const { data: result, error } = await supabase
+              .from(table)
+              .insert(data)
+              .select();
+
+            if (error) {
+              return { success: false, error: error.message, table };
+            }
+
+            return {
+              success: true,
+              table,
+              inserted: result,
+            };
+          } catch (err) {
+            return {
+              success: false,
+              error: (err as Error).message,
+              table,
             };
           }
         },

@@ -73,9 +73,7 @@ export default function ChatInterface() {
   // Chat history state
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
-  const [savedToast, setSavedToast] = useState(false);
 
   // Image generation state
   const [generatedImages, setGeneratedImages] = useState<Record<string, string>>({});
@@ -86,10 +84,14 @@ export default function ChatInterface() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  // Keep a ref in sync with messages so onFinish can read the latest value
+  const messagesRef = useRef<typeof messages>([]);
 
   useEffect(() => {
     setHasKey(settings.apiKey.trim().length > 0);
   }, [settings]);
+
+  const currentSessionIdRef = useRef<string | null>(null);
 
   const { messages, input, handleInputChange, handleSubmit, isLoading, error, setMessages, setInput } =
     useChat({
@@ -102,7 +104,34 @@ export default function ChatInterface() {
       onError: (err) => {
         console.error("Chat error:", err);
       },
+      onFinish: async () => {
+        // Auto-save after each completed AI response
+        // We read from the ref so we always have the latest session ID
+        try {
+          const res = await fetch("/api/history", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              messages: messagesRef.current,
+              provider: settings.provider,
+              modelId: settings.modelId,
+              sessionId: currentSessionIdRef.current,
+            }),
+          });
+          const data = await res.json();
+          if (data.id && !currentSessionIdRef.current) {
+            currentSessionIdRef.current = data.id;
+            setCurrentSessionId(data.id);
+          }
+        } catch (err) {
+          console.error("Auto-save failed:", err);
+        }
+      },
     });
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   useEffect(() => {
     const el = messagesEndRef.current;
@@ -155,32 +184,6 @@ export default function ChatInterface() {
     setTimeout(() => inputRef.current?.focus(), 50);
   }
 
-  // Save current session to Supabase
-  async function handleSaveSession() {
-    if (messages.length === 0 || isSaving) return;
-    setIsSaving(true);
-    try {
-      const res = await fetch("/api/history", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages,
-          provider: settings.provider,
-          modelId: settings.modelId,
-          sessionId: currentSessionId,
-        }),
-      });
-      const data = await res.json();
-      if (data.id) {
-        setCurrentSessionId(data.id);
-        setSavedToast(true);
-        setTimeout(() => setSavedToast(false), 2000);
-      }
-    } finally {
-      setIsSaving(false);
-    }
-  }
-
   // Load history list
   async function handleOpenHistory() {
     setIsLoadingHistory(true);
@@ -203,6 +206,7 @@ export default function ChatInterface() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         setMessages(data.messages as any);
         setCurrentSessionId(id);
+        currentSessionIdRef.current = id;
         setGeneratedImages({});
         setShowHistory(false);
       }
@@ -287,32 +291,6 @@ export default function ChatInterface() {
               <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
-
-          {/* Save button */}
-          {messages.length > 0 && (
-            <button
-              onClick={handleSaveSession}
-              disabled={isSaving}
-              className="w-9 h-9 flex items-center justify-center rounded-full bg-surface-2 text-text-secondary hover:bg-surface-3 hover:text-text-primary transition-colors disabled:opacity-40"
-              aria-label="Save chat"
-              title={savedToast ? "Saved!" : "Save chat"}
-            >
-              {savedToast ? (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                  <path d="M20 6L9 17l-5-5" stroke="#4ade80" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              ) : isSaving ? (
-                <svg className="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none">
-                  <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeDasharray="45 25" />
-                </svg>
-              ) : (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                  <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M17 21v-8H7v8M7 3v5h8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              )}
-            </button>
-          )}
 
           {/* History button */}
           <button
@@ -563,7 +541,7 @@ export default function ChatInterface() {
             {/* New chat button */}
             <div className="px-4 py-3 border-b border-border">
               <button
-                onClick={() => { setMessages([]); setCurrentSessionId(null); setGeneratedImages({}); setShowHistory(false); }}
+                onClick={() => { setMessages([]); setCurrentSessionId(null); currentSessionIdRef.current = null; setGeneratedImages({}); setShowHistory(false); }}
                 className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl bg-accent/10 border border-accent/20 text-accent-light text-sm font-medium hover:bg-accent/20 transition-colors"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none">

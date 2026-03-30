@@ -1,4 +1,4 @@
-import { streamText, tool } from "ai";
+import { streamText, tool, convertToCoreMessages } from "ai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAI } from "@ai-sdk/openai";
@@ -83,7 +83,14 @@ THOUGHT CAPTURE RULES:
 
 When answering questions, always query the relevant tables first.
 For trend/inference questions, pull enough data to give a meaningful analysis.
-Be concise but insightful. Format numbers clearly. Use markdown for lists and tables.
+
+RESPONSE STYLE:
+- Lead with facts. No preamble, explanations, or context unless asked.
+- Numbers only: avoid prose elaboration. Use concise labels.
+- Lists/tables for data comparisons. Markdown-formatted.
+- If user asks for more detail: then expand.
+- Avoid: "I found...", "Based on the data...", "Let me analyze...". Just answer.
+
 Today's date is ${new Date().toISOString().split("T")[0]}.`;
 }
 
@@ -130,11 +137,29 @@ export async function POST(req: Request) {
 
   const supabase = getSupabase();
 
+  // Sanitize UI messages before converting: drop any assistant message whose
+  // tool invocations are not all in "result" state (orphaned calls break the API).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const safeMessages = (messages as any[]).filter((m: any) => {
+    if (m.role === "assistant" && Array.isArray(m.toolInvocations)) {
+      return m.toolInvocations.every((t: any) => t.state === "result");
+    }
+    return true;
+  });
+
+  let coreMessages: ReturnType<typeof convertToCoreMessages>;
+  try {
+    coreMessages = convertToCoreMessages(safeMessages);
+  } catch {
+    // Fall back to just the last user message if history is unrecoverable
+    const lastUser = [...safeMessages].reverse().find((m: any) => m.role === "user");
+    coreMessages = convertToCoreMessages(lastUser ? [lastUser] : []);
+  }
+
   const result = streamText({
     model,
     system: SYSTEM_PROMPT,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    messages: messages as any,
+    messages: coreMessages,
     maxSteps: 10,
     tools: {
       query_table: tool({
@@ -434,5 +459,22 @@ export async function POST(req: Request) {
     },
   });
 
-  return result.toDataStreamResponse();
+  return result.toDataStreamResponse({
+    getErrorMessage: (error) => {
+      const msg = error instanceof Error ? error.message : String(error ?? "");
+      const lower = msg.toLowerCase();
+      if (
+        lower.includes("402") ||
+        lower.includes("credit") ||
+        lower.includes("insufficient") ||
+        lower.includes("payment") ||
+        lower.includes("billing") ||
+        lower.includes("quota") ||
+        lower.includes("balance")
+      ) {
+        return "OUT_OF_CREDITS";
+      }
+      return msg || "An error occurred.";
+    },
+  });
 }

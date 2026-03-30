@@ -1,16 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 export default function LoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -23,18 +15,18 @@ export default function LoginPage() {
     setError(null);
     setMessage(null);
 
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
+    const response = await fetch("/api/auth/signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
     });
 
-    if (error) {
-      setError(error.message);
+    const data = await response.json();
+
+    if (response.ok) {
+      setMessage(data.message || "Check your email to confirm your account.");
     } else {
-      setMessage("Check your email to confirm your account.");
+      setError(data.error || "Sign up failed");
     }
     setLoading(false);
   };
@@ -44,16 +36,19 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
 
-    const { error, data } = await supabase.auth.signInWithPassword({
-      email,
-      password,
+    const response = await fetch("/api/auth/signin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
     });
 
-    if (error) {
-      setError(error.message);
+    if (response.ok) {
+      // Redirect to home page - middleware will recognize the session from cookies
+      window.location.href = "/";
+    } else {
+      const data = await response.json();
+      setError(data.error || "Sign in failed");
       setLoading(false);
-    } else if (data.session) {
-      router.push("/");
     }
   };
 

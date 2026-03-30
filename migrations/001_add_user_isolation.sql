@@ -2,15 +2,15 @@
 -- This migration enables Row Level Security (RLS) filtering by user
 
 -- Function to add user_id column if it doesn't exist
-CREATE OR REPLACE FUNCTION add_user_id_column(table_name text)
+CREATE OR REPLACE FUNCTION add_user_id_column(p_table_name text)
 RETURNS void AS $$
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.columns
-    WHERE table_name = table_name AND column_name = 'user_id'
+    WHERE table_schema = 'public' AND table_name = p_table_name AND column_name = 'user_id'
   ) THEN
-    EXECUTE format('ALTER TABLE %I ADD COLUMN user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE', table_name);
-    EXECUTE format('CREATE INDEX idx_%s_user_id ON %I(user_id)', table_name, table_name);
+    EXECUTE format('ALTER TABLE %I ADD COLUMN user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE', p_table_name);
+    EXECUTE format('CREATE INDEX idx_%s_user_id ON %I(user_id)', p_table_name, p_table_name);
   END IF;
 END;
 $$ LANGUAGE plpgsql;

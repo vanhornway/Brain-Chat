@@ -13,6 +13,7 @@ function getPermissionSupabase() {
 /**
  * Check if user has table-level access (read or write)
  * Used for tables like finance_income, finance_donations, etc.
+ * If no permission row exists, denies finance tables but allows others
  */
 export async function checkTableAccess(
   userId: string,
@@ -30,8 +31,14 @@ export async function checkTableAccess(
       .single();
 
     if (error || !data) {
-      // No explicit permission = deny
-      return false;
+      // If permission row doesn't exist:
+      // - Deny for finance/rental tables (sensitive)
+      // - Allow for others (RLS will filter by user_id)
+      const financeTables = ["finance_income", "finance_donations", "finance_net_worth", "finance_tax_profile", "rental_income", "rental_expenses"];
+      if (financeTables.includes(tableName)) {
+        return false;
+      }
+      return true; // Allow non-finance tables by default
     }
 
     if (operation === "read") {
@@ -51,6 +58,7 @@ export async function checkTableAccess(
 /**
  * Check if user has subject-level access (e.g., can user access Nyel's health data?)
  * Used for tables with 'subject' column: blood_glucose, scout_progress, college_prep_log, etc.
+ * If no permission row exists, allow write for same subject, deny for others
  */
 export async function checkSubjectAccess(
   userId: string,
@@ -68,6 +76,8 @@ export async function checkSubjectAccess(
       .single();
 
     if (error || !data) {
+      // If permission row doesn't exist, deny access (fail closed)
+      // Permissions must be explicitly granted via user_subject_access table
       return false;
     }
 
@@ -87,7 +97,7 @@ export async function checkSubjectAccess(
 
 /**
  * Tables that use subject-level access control
- * These tables have a 'subject' column (Umair, Nyel, Emaad, Omer)
+ * These tables have either 'subject' or 'kid_name' column
  */
 export const SUBJECT_BASED_TABLES = new Set([
   "blood_glucose",
@@ -116,6 +126,40 @@ export const SUBJECT_BASED_TABLES = new Set([
   "hiking_history",
   "personal_hikes",
 ]);
+
+/**
+ * Maps table names to their identity column
+ * Most use 'subject', but some (kid/scout/college tables) use 'kid_name'
+ */
+export const TABLE_IDENTITY_COLUMN: Record<string, string> = {
+  // Subject-based tables
+  "blood_glucose": "subject",
+  "blood_pressure": "subject",
+  "weight_log": "subject",
+  "workouts": "subject",
+  "health_metrics": "subject",
+  "fasting_windows": "subject",
+  "meals": "subject",
+  "lumen_entries": "subject",
+  "lab_results": "subject",
+  "inr_readings": "subject",
+  "medications": "subject",
+  "medical_conditions": "subject",
+  "doctor_visits": "subject",
+  "eye_prescriptions": "subject",
+  "goals": "subject",
+  "hiking_history": "subject",
+  "personal_hikes": "subject",
+  "vehicle_log": "subject",
+  "family_events": "subject",
+  // Kid/scout/college tables use kid_name
+  "scout_progress": "kid_name",
+  "scout_merit_badges": "kid_name",
+  "college_prep_log": "kid_name",
+  "college_prep_timeline": "kid_name",
+  "school_calendar": "kid_name",
+  "kids": "kid_name",
+};
 
 /**
  * Tables that use table-level access control (no subject)

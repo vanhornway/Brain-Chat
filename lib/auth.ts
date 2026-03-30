@@ -4,9 +4,10 @@ import { cookies } from "next/headers";
 export async function createAuthenticatedSupabaseClient() {
   const cookieStore = await cookies();
 
+  // Use anon key to read session from cookies, not service key
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_KEY!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
         get(name: string) {
@@ -26,14 +27,21 @@ export async function createAuthenticatedSupabaseClient() {
 export async function getAuthenticatedUser() {
   const supabase = await createAuthenticatedSupabaseClient();
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
 
-  if (!session?.user) {
-    return null;
+  if (error) {
+    console.error("getUser error:", error.message, error.code);
+    throw new Error(`User not found. ${error.message}`);
   }
 
-  return session.user;
+  if (!user) {
+    console.error("getUser returned no user");
+    throw new Error("User not found");
+  }
+
+  return user;
 }
 
 export async function getAuthenticatedUserOrThrow() {

@@ -90,6 +90,9 @@ export default function ChatInterface() {
   // OpenRouter credit warning
   const [creditRemaining, setCreditRemaining] = useState<number | null>(null);
 
+  // Current user email
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -118,6 +121,16 @@ export default function ChatInterface() {
       })
       .catch(() => {});
   }, [settings.apiKey, settings.provider]);
+
+  // Fetch current user info
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.email) setUserEmail(d.email);
+      })
+      .catch(() => {});
+  }, []);
 
   const currentSessionIdRef = useRef<string | null>(null);
 
@@ -308,7 +321,9 @@ export default function ChatInterface() {
             </svg>
           </div>
           <div>
-            <h1 className="text-base font-semibold text-text-primary leading-tight">Brain Chat</h1>
+            <h1 className="text-base font-semibold text-text-primary leading-tight">
+              Brain Chat {userEmail && `(${userEmail})`}
+            </h1>
             <p className="text-xs text-text-muted leading-tight">
               {hasKey
                 ? `${settings.provider === "anthropic" ? "Anthropic" : settings.provider === "google" ? "Gemini" : "OpenRouter"} · ${settings.modelId}`
@@ -363,6 +378,7 @@ export default function ChatInterface() {
           <button
             onClick={async () => {
               await fetch("/api/auth/logout", { method: "POST" });
+              window.location.href = "/login";
             }}
             className="w-9 h-9 flex items-center justify-center rounded-full bg-surface-2 text-text-secondary hover:bg-red-500/20 hover:text-red-400 transition-colors"
             aria-label="Sign out"

@@ -10,6 +10,7 @@ import {
   checkAccessToTable,
   SUBJECT_BASED_TABLES,
   TABLE_BASED_TABLES,
+  TABLE_IDENTITY_COLUMN,
   getUserAccessibleSubjects,
 } from "@/lib/permissions";
 import type { Provider } from "@/lib/providers";
@@ -56,12 +57,30 @@ function getModel(provider: Provider, modelId: string, apiKey: string) {
   }
 }
 
-function buildSystemPrompt() {
+function inferSubjectFromEmail(email: string): string {
+  // Map email prefixes to subject names
+  const emailToSubject: Record<string, string> = {
+    "mumair": "Umair",
+    "nyel": "Nyel",
+    "emaad": "Emaad",
+    "huma": "Huma",
+    "omer": "Omer",
+  };
+
+  const part = email.split("@")[0].split(".")[0].toLowerCase();
+  return emailToSubject[part] || part.charAt(0).toUpperCase() + part.slice(1);
+}
+
+function buildSystemPrompt(userEmail: string) {
+  const userSubject = inferSubjectFromEmail(userEmail);
   const schemaLines = Object.entries(TABLE_SCHEMA)
     .map(([table, cols]) => `  ${table}: ${cols}`)
     .join("\n");
 
   return `You are a personal AI assistant with access to a family life database.
+
+**CURRENT USER:** ${userEmail} (subject: ${userSubject})
+When the user says "my" or "I", they are referring to ${userSubject}'s data.
 
 AVAILABLE TABLES AND THEIR COLUMNS (use ONLY these exact table and column names):
 
@@ -76,6 +95,7 @@ ACCESS CONTROL:
 IMPORTANT RULES:
 - ALWAYS call query_table when asked about data. If denied, explain the access restriction.
 - For subject-based tables (health, scouting, college, etc.), include the subject parameter: query_table('blood_glucose', subject='Nyel')
+- When the user asks about "my" data (rank, health, etc.), use subject='${userSubject}' automatically
 - NEVER specify order_by in query_table calls — the tool handles ordering automatically.
 - NEVER invent table or column names — only use what is listed above.
 - For filters, only use columns that exist in that table's schema above.
@@ -110,14 +130,17 @@ RESPONSE STYLE:
 Today's date is ${new Date().toISOString().split("T")[0]}.`;
 }
 
-const SYSTEM_PROMPT = buildSystemPrompt();
+// Note: SYSTEM_PROMPT is now built per-request to include the current user's identity
+// (see inside POST handler)
 
 export async function POST(req: Request) {
   // Check authentication
   let user;
   try {
     user = await getAuthenticatedUserOrThrow();
-  } catch {
+    console.log("Authenticated user:", user.id, user.email);
+  } catch (e) {
+    console.error("Auth error:", e);
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { "Content-Type": "application/json" },
@@ -183,10 +206,14 @@ export async function POST(req: Request) {
     coreMessages = convertToCoreMessages(lastUser ? [lastUser] : []);
   }
 
-  const result = streamText({
-    model,
-    system: SYSTEM_PROMPT,
-    messages: coreMessages,
+  let result;
+  try {
+    console.log("Calling streamText with model:", modelId, "provider:", provider);
+    const SYSTEM_PROMPT = buildSystemPrompt(user.email || "unknown");
+    result = streamText({
+      model,
+      system: SYSTEM_PROMPT,
+      messages: coreMessages,
     maxSteps: 10,
     tools: {
       query_table: tool({
@@ -246,12 +273,16 @@ export async function POST(req: Request) {
 
             let query = supabase.from(table).select("*");
 
-            // Always filter by user_id for data isolation
-            query = query.eq("user_id", user.id);
-
-            // If subject-based table, filter by subject
-            if (SUBJECT_BASED_TABLES.has(table) && subject) {
-              query = query.eq("subject", subject);
+            // Filter by user_id or subject depending on table type
+            if (SUBJECT_BASED_TABLES.has(table)) {
+              // Subject-based tables (health, scout, college, etc.): filter by subject, not user_id
+              if (subject) {
+                const identityCol = TABLE_IDENTITY_COLUMN[table] ?? "subject";
+                query = query.eq(identityCol, subject);
+              }
+            } else {
+              // Table-based and personal-only tables: filter by user_id for data isolation
+              query = query.eq("user_id", user.id);
             }
 
             // Apply equality filters
@@ -366,12 +397,17 @@ export async function POST(req: Request) {
               };
             }
 
-            const { data, error } = await supabase
+            let searchQuery = supabase
               .from(table)
               .select("*")
-              .eq("user_id", user.id)
-              .ilike(column, `%${query}%`)
-              .limit(limit ?? 20);
+              .ilike(column, `%${query}%`);
+
+            // Filter by user_id only for non-subject-based tables
+            if (!SUBJECT_BASED_TABLES.has(table)) {
+              searchQuery = searchQuery.eq("user_id", user.id);
+            }
+
+            const { data, error } = await searchQuery.limit(limit ?? 20);
 
             if (error) {
               return {
@@ -503,12 +539,16 @@ export async function POST(req: Request) {
 
             let query = supabase.from(table).select("*");
 
-            // Always filter by user_id for data isolation
-            query = query.eq("user_id", user.id);
-
-            // If subject-based table, filter by subject
-            if (SUBJECT_BASED_TABLES.has(table) && subject) {
-              query = query.eq("subject", subject);
+            // Filter by user_id or subject depending on table type
+            if (SUBJECT_BASED_TABLES.has(table)) {
+              // Subject-based tables (health, scout, college, etc.): filter by subject, not user_id
+              if (subject) {
+                const identityCol = TABLE_IDENTITY_COLUMN[table] ?? "subject";
+                query = query.eq(identityCol, subject);
+              }
+            } else {
+              // Table-based and personal-only tables: filter by user_id for data isolation
+              query = query.eq("user_id", user.id);
             }
 
             if (filters && typeof filters === "object") {
@@ -574,24 +614,40 @@ export async function POST(req: Request) {
         },
       }),
     },
-  });
+    });
+  } catch (err) {
+    console.error("streamText error:", err);
+    return new Response(
+      JSON.stringify({ error: (err as Error).message }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
+    );
+  }
 
-  return result.toDataStreamResponse({
-    getErrorMessage: (error) => {
-      const msg = error instanceof Error ? error.message : String(error ?? "");
-      const lower = msg.toLowerCase();
-      if (
-        lower.includes("402") ||
-        lower.includes("credit") ||
-        lower.includes("insufficient") ||
-        lower.includes("payment") ||
-        lower.includes("billing") ||
-        lower.includes("quota") ||
-        lower.includes("balance")
-      ) {
-        return "OUT_OF_CREDITS";
-      }
-      return msg || "An error occurred.";
-    },
-  });
+  try {
+    return result.toDataStreamResponse({
+      getErrorMessage: (error) => {
+        const msg = error instanceof Error ? error.message : String(error ?? "");
+        console.error("streamText error message:", msg);
+        const lower = msg.toLowerCase();
+        if (
+          lower.includes("402") ||
+          lower.includes("credit") ||
+          lower.includes("insufficient") ||
+          lower.includes("payment") ||
+          lower.includes("billing") ||
+          lower.includes("quota") ||
+          lower.includes("balance")
+        ) {
+          return "OUT_OF_CREDITS";
+        }
+        return msg || "An error occurred.";
+      },
+    });
+  } catch (err) {
+    console.error("toDataStreamResponse error:", err);
+    return new Response(
+      JSON.stringify({ error: (err as Error).message }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
+    );
+  }
 }

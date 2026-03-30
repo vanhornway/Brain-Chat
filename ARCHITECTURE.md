@@ -256,9 +256,37 @@ Tables with `subject` / `kid_name` / `property` allow querying across users/enti
 
 ## Security
 
+### Authentication
+- Supabase Auth (email/password)
+- Session cookies managed via middleware
+- Routes require valid session
+
+### Authorization (RBAC)
+
+**Three-layer permission system**:
+
+1. **Table-Level Access**: Which tables can user access?
+   - `user_table_access(user_id, table_name, can_read, can_write)`
+   - Finance tables: requires explicit permission (blocked for kids)
+   - Enforced at API + database level
+
+2. **Subject-Level Access**: Can user see Umair's vs Nyel's data?
+   - `user_subject_access(user_id, subject, can_read, can_write)`
+   - For tables with `subject` column (health, scouting, college, etc.)
+   - Parent (Umair) can read kids' data (read-only)
+   - Kids can only access their own subject
+
+3. **Personal-Only Tables**: Thoughts visible to owner only
+   - RLS filters by `user_id` exclusively
+   - No subject mapping
+
+**Enforcement at two levels**:
+- **API Layer**: `checkAccessToTable()` in `lib/permissions.ts`
+- **Database Layer**: RLS policies on all tables
+
 ### Server-side Only
 - Service role key (Supabase) stored in environment, never exposed
-- Vercel API routes handle authentication
+- Backend filters all queries by user_id + subject (if applicable)
 - Client sends only anon key (for direct queries, if needed)
 
 ### Client-side
@@ -274,6 +302,7 @@ Tables with `subject` / `kid_name` / `property` allow querying across users/enti
 ### Error Masking
 - Credit/billing errors detected and returned as `OUT_OF_CREDITS`
 - Other errors passed through for debugging
+- Permission errors include reason: "No read access to finance_income"
 
 ## Performance
 

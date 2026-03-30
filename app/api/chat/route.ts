@@ -6,6 +6,12 @@ import { z } from "zod";
 import { createClient } from "@supabase/supabase-js";
 import { DATE_COLUMNS, TABLE_SCHEMA } from "@/lib/supabase";
 import { getAuthenticatedUserOrThrow } from "@/lib/auth";
+import {
+  checkAccessToTable,
+  SUBJECT_BASED_TABLES,
+  TABLE_BASED_TABLES,
+  getUserAccessibleSubjects,
+} from "@/lib/permissions";
 import type { Provider } from "@/lib/providers";
 
 export const runtime = "nodejs";
@@ -55,14 +61,21 @@ function buildSystemPrompt() {
     .map(([table, cols]) => `  ${table}: ${cols}`)
     .join("\n");
 
-  return `You are Umair's personal AI assistant with access to his life database.
+  return `You are a personal AI assistant with access to a family life database.
 
 AVAILABLE TABLES AND THEIR COLUMNS (use ONLY these exact table and column names):
 
 ${schemaLines}
 
+ACCESS CONTROL:
+- Some tables require explicit 'subject' parameter (Umair, Nyel, Emaad, Omer): blood_glucose, blood_pressure, weight_log, workouts, health_metrics, scout_progress, college_prep_log, family_events, etc.
+- Some tables are restricted (finance_income, finance_donations, finance_net_worth, etc.) — queries may be denied if user lacks permission.
+- Thoughts table: users can only see their own thoughts (no subject parameter).
+- If a query returns "Access denied", inform the user they don't have permission for that table.
+
 IMPORTANT RULES:
-- ALWAYS call query_table when asked about any data. NEVER refuse to query or say a table cannot be accessed.
+- ALWAYS call query_table when asked about data. If denied, explain the access restriction.
+- For subject-based tables (health, scouting, college, etc.), include the subject parameter: query_table('blood_glucose', subject='Nyel')
 - NEVER specify order_by in query_table calls — the tool handles ordering automatically.
 - NEVER invent table or column names — only use what is listed above.
 - For filters, only use columns that exist in that table's schema above.
@@ -71,15 +84,16 @@ IMPORTANT RULES:
 IMAGE / OCR RULES:
 - When the user attaches an image, analyze it carefully and extract all relevant data.
 - Identify which table(s) the data belongs to based on content (e.g. CGM screenshot → blood_glucose, lab report → lab_results, weight scale → weight_log).
-- Use insert_row to save the extracted data. Confirm what you inserted after success.
+- Use insert_row to save the extracted data. Include the subject if needed (e.g., if parent uploading child's data: subject="Nyel"). Confirm what you inserted after success.
 - If the image contains multiple readings, insert each as a separate row.
-- For blood_glucose: use subject="Umair", reading_type based on context (fasting/post-meal/random).
-- For weight_log: use subject="Umair".
-- For lab_results: use subject="Umair", set is_flagged=true if value is outside reference range.
+- For blood_glucose: include subject (Umair, Nyel, etc.), reading_type based on context (fasting/post-meal/random).
+- For weight_log: include subject.
+- For lab_results: include subject, set is_flagged=true if value is outside reference range.
 
 THOUGHT CAPTURE RULES:
 - When the user says anything like "save this thought", "note this", "remember this", "log this idea", or just shares a raw observation/idea without asking a question — treat it as a thought to capture.
-- Use insert_row on the thoughts table with: subject="Umair", content=<the thought>, domain=<inferred topic e.g. health/finance/family/hiking/work/ideas>, tags=<array of relevant keywords>.
+- Use insert_row on the thoughts table with: content=<the thought>, domain=<inferred topic e.g. health/finance/family/hiking/work/ideas>, tags=<array of relevant keywords>.
+- Do NOT include subject — thoughts are personal to each user.
 - Confirm with a short acknowledgment after saving. Do not ask clarifying questions — just save it and confirm.
 - If the user says "what did I think about X" or "show my thoughts on X", query the thoughts table.
 
@@ -182,6 +196,10 @@ export async function POST(req: Request) {
           table: z
             .string()
             .describe("The name of the Supabase table to query."),
+          subject: z
+            .string()
+            .optional()
+            .describe("Subject filter (Umair, Nyel, Emaad, Omer) for subject-based tables like blood_glucose, scout_progress, etc."),
           filters: z
             .record(z.string(), z.unknown())
             .optional()
@@ -204,16 +222,37 @@ export async function POST(req: Request) {
         }),
         execute: async ({
           table,
+          subject,
           filters,
           date_from,
           date_to,
           limit,
         }) => {
           try {
+            // Check permission
+            const permission = await checkAccessToTable(
+              user.id,
+              table,
+              "read",
+              subject
+            );
+            if (!permission.allowed) {
+              return {
+                success: false,
+                error: permission.reason || "Access denied",
+                table,
+              };
+            }
+
             let query = supabase.from(table).select("*");
 
             // Always filter by user_id for data isolation
             query = query.eq("user_id", user.id);
+
+            // If subject-based table, filter by subject
+            if (SUBJECT_BASED_TABLES.has(table) && subject) {
+              query = query.eq("subject", subject);
+            }
 
             // Apply equality filters
             if (filters && typeof filters === "object") {
@@ -315,6 +354,18 @@ export async function POST(req: Request) {
         }),
         execute: async ({ table, column, query, limit }) => {
           try {
+            // Check permission
+            const permission = await checkAccessToTable(user.id, table, "read");
+            if (!permission.allowed) {
+              return {
+                success: false,
+                error: permission.reason || "Access denied",
+                table,
+                column,
+                query,
+              };
+            }
+
             const { data, error } = await supabase
               .from(table)
               .select("*")
@@ -365,6 +416,22 @@ export async function POST(req: Request) {
         }),
         execute: async ({ table, data }) => {
           try {
+            // Check permission for write access
+            const subject = (data as any).subject;
+            const permission = await checkAccessToTable(
+              user.id,
+              table,
+              "write",
+              subject
+            );
+            if (!permission.allowed) {
+              return {
+                success: false,
+                error: permission.reason || "Write access denied",
+                table,
+              };
+            }
+
             // Auto-add user_id for data isolation
             const dataWithUser = {
               ...data,
@@ -400,6 +467,10 @@ export async function POST(req: Request) {
           "Get the count and raw data from a table for computing sums, averages, or other aggregations. Use when you need statistics across a dataset.",
         parameters: z.object({
           table: z.string().describe("The name of the Supabase table."),
+          subject: z
+            .string()
+            .optional()
+            .describe("Subject filter (Umair, Nyel, Emaad, Omer) if applicable."),
           filters: z
             .record(z.string(), z.unknown())
             .optional()
@@ -413,12 +484,32 @@ export async function POST(req: Request) {
             .optional()
             .describe("End date filter in YYYY-MM-DD format."),
         }),
-        execute: async ({ table, filters, date_from, date_to }) => {
+        execute: async ({ table, subject, filters, date_from, date_to }) => {
           try {
+            // Check permission
+            const permission = await checkAccessToTable(
+              user.id,
+              table,
+              "read",
+              subject
+            );
+            if (!permission.allowed) {
+              return {
+                success: false,
+                error: permission.reason || "Access denied",
+                table,
+              };
+            }
+
             let query = supabase.from(table).select("*");
 
             // Always filter by user_id for data isolation
             query = query.eq("user_id", user.id);
+
+            // If subject-based table, filter by subject
+            if (SUBJECT_BASED_TABLES.has(table) && subject) {
+              query = query.eq("subject", subject);
+            }
 
             if (filters && typeof filters === "object") {
               for (const [col, val] of Object.entries(filters)) {

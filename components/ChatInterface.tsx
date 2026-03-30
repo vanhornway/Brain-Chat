@@ -87,6 +87,9 @@ export default function ChatInterface() {
   const [generatingImageFor, setGeneratingImageFor] = useState<string | null>(null);
   const [imageError, setImageError] = useState<string | null>(null);
 
+  // OpenRouter credit warning
+  const [creditRemaining, setCreditRemaining] = useState<number | null>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -97,6 +100,24 @@ export default function ChatInterface() {
   useEffect(() => {
     setHasKey(settings.apiKey.trim().length > 0);
   }, [settings]);
+
+  // Check OpenRouter credit balance whenever the API key changes
+  useEffect(() => {
+    if (settings.provider !== "openrouter" || !settings.apiKey.trim()) {
+      setCreditRemaining(null);
+      return;
+    }
+    fetch("/api/credit-check", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ apiKey: settings.apiKey }),
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        if (typeof d.limit_remaining === "number") setCreditRemaining(d.limit_remaining);
+      })
+      .catch(() => {});
+  }, [settings.apiKey, settings.provider]);
 
   const currentSessionIdRef = useRef<string | null>(null);
 
@@ -337,6 +358,22 @@ export default function ChatInterface() {
               <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" stroke="currentColor" strokeWidth="2" />
             </svg>
           </button>
+
+          {/* Logout button */}
+          <button
+            onClick={async () => {
+              await fetch("/api/auth/logout", { method: "POST" });
+            }}
+            className="w-9 h-9 flex items-center justify-center rounded-full bg-surface-2 text-text-secondary hover:bg-red-500/20 hover:text-red-400 transition-colors"
+            aria-label="Sign out"
+            title="Sign out"
+          >
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <polyline points="16 17 21 12 16 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <line x1="21" y1="12" x2="9" y2="12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
         </div>
       </header>
 
@@ -399,11 +436,47 @@ export default function ChatInterface() {
           </div>
         )}
 
+        {creditRemaining !== null && creditRemaining < 5 && (
+          <div className="mx-3 mb-3 bg-amber-950/40 border border-amber-700/40 rounded-xl px-4 py-3 flex items-start gap-2">
+            <span className="text-amber-400 text-base leading-none mt-0.5">⚠️</span>
+            <div>
+              <p className="text-amber-300 text-xs font-medium">Low OpenRouter credit</p>
+              <p className="text-amber-300/70 text-xs mt-0.5">
+                ${creditRemaining.toFixed(2)} remaining.{" "}
+                <a
+                  href="https://openrouter.ai/credits"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline hover:text-amber-200"
+                >
+                  Add credits →
+                </a>
+              </p>
+            </div>
+          </div>
+        )}
+
         {(error || imageError) && (
           <div className="mx-3 mb-3 bg-red-950/40 border border-red-800/40 rounded-xl px-4 py-3">
-            <p className="text-red-400 text-sm font-medium mb-0.5">Error</p>
+            <p className="text-red-400 text-sm font-medium mb-0.5">
+              {error?.message === "OUT_OF_CREDITS" ? "Out of credits" : "Error"}
+            </p>
             <p className="text-red-300/80 text-xs">
-              {imageError || error?.message || "Something went wrong. Check your API key and try again."}
+              {error?.message === "OUT_OF_CREDITS" ? (
+                <>
+                  Your OpenRouter account has no remaining credits.{" "}
+                  <a
+                    href="https://openrouter.ai/credits"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline hover:text-red-200"
+                  >
+                    Add credits at openrouter.ai →
+                  </a>
+                </>
+              ) : (
+                imageError || error?.message || "Something went wrong. Check your API key and try again."
+              )}
             </p>
           </div>
         )}

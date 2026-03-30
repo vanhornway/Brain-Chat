@@ -5,12 +5,14 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { z } from "zod";
 import { createClient } from "@supabase/supabase-js";
 import { DATE_COLUMNS, TABLE_SCHEMA } from "@/lib/supabase";
+import { getAuthenticatedUserOrThrow } from "@/lib/auth";
 import type { Provider } from "@/lib/providers";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-// Build a Supabase client using the service role key (bypasses RLS — server-side only)
+// Build a Supabase client using the service role key (server-side only)
+// All queries will be filtered by user_id via RLS in the database
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_KEY;
@@ -97,6 +99,17 @@ Today's date is ${new Date().toISOString().split("T")[0]}.`;
 const SYSTEM_PROMPT = buildSystemPrompt();
 
 export async function POST(req: Request) {
+  // Check authentication
+  let user;
+  try {
+    user = await getAuthenticatedUserOrThrow();
+  } catch {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   let body: {
     messages: unknown[];
     provider: Provider;
@@ -198,6 +211,9 @@ export async function POST(req: Request) {
         }) => {
           try {
             let query = supabase.from(table).select("*");
+
+            // Always filter by user_id for data isolation
+            query = query.eq("user_id", user.id);
 
             // Apply equality filters
             if (filters && typeof filters === "object") {
@@ -302,6 +318,7 @@ export async function POST(req: Request) {
             const { data, error } = await supabase
               .from(table)
               .select("*")
+              .eq("user_id", user.id)
               .ilike(column, `%${query}%`)
               .limit(limit ?? 20);
 
@@ -348,9 +365,15 @@ export async function POST(req: Request) {
         }),
         execute: async ({ table, data }) => {
           try {
+            // Auto-add user_id for data isolation
+            const dataWithUser = {
+              ...data,
+              user_id: user.id,
+            };
+
             const { data: result, error } = await supabase
               .from(table)
-              .insert(data)
+              .insert(dataWithUser)
               .select();
 
             if (error) {
@@ -393,6 +416,9 @@ export async function POST(req: Request) {
         execute: async ({ table, filters, date_from, date_to }) => {
           try {
             let query = supabase.from(table).select("*");
+
+            // Always filter by user_id for data isolation
+            query = query.eq("user_id", user.id);
 
             if (filters && typeof filters === "object") {
               for (const [col, val] of Object.entries(filters)) {

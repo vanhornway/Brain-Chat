@@ -63,7 +63,7 @@ export async function checkTableAccess(
 export async function checkSubjectAccess(
   userId: string,
   subject: string,
-  operation: "read" | "write"
+  operation: "read" | "write" | "delete"
 ): Promise<boolean> {
   try {
     const supabase = getPermissionSupabase();

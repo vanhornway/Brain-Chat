@@ -18,7 +18,7 @@ function getPermissionSupabase() {
 export async function checkTableAccess(
   userId: string,
   tableName: string,
-  operation: "read" | "write"
+  operation: "read" | "write" | "delete"
 ): Promise<boolean> {
   try {
     const supabase = getPermissionSupabase();

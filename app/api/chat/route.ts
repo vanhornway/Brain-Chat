@@ -4,7 +4,8 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAI } from "@ai-sdk/openai";
 import { z } from "zod";
 import { createClient } from "@supabase/supabase-js";
-import { DATE_COLUMNS, TABLE_SCHEMA } from "@/lib/supabase";
+import { DATE_COLUMNS, TABLE_SCHEMA, KNOWN_TABLES } from "@/lib/supabase";
+import type { KnownTable } from "@/lib/supabase";
 import { getAuthenticatedUserOrThrow } from "@/lib/auth";
 import {
   checkAccessToTable,
@@ -487,6 +488,67 @@ export async function POST(req: Request) {
               success: true,
               table,
               inserted: result,
+            };
+          } catch (err) {
+            return {
+              success: false,
+              error: (err as Error).message,
+              table,
+            };
+          }
+        },
+      }),
+
+      delete_row: tool({
+        description:
+          "Delete a row from a Supabase table by ID. Use with caution as this cannot be undone.",
+        parameters: z.object({
+          table: z.string().describe("The name of the Supabase table."),
+          id: z.string().describe("The ID (UUID) of the row to delete."),
+        }),
+        execute: async ({ table, id }) => {
+          try {
+            // Validate table name
+            if (!KNOWN_TABLES.includes(table as KnownTable)) {
+              return {
+                success: false,
+                error: `Unknown table: ${table}`,
+                table,
+              };
+            }
+
+            // Check permission
+            const permission = await checkAccessToTable(user.id, table, "delete");
+            if (!permission.allowed) {
+              return {
+                success: false,
+                error: permission.reason || "Access denied",
+                table,
+              };
+            }
+
+            // For subject-based tables, verify user owns the row
+            let deleteQuery = supabase.from(table).delete().eq("id", id);
+
+            // For non-subject tables, also filter by user_id to prevent accidental deletes
+            if (!SUBJECT_BASED_TABLES.has(table)) {
+              deleteQuery = deleteQuery.eq("user_id", user.id);
+            }
+
+            const { error, data } = await deleteQuery;
+
+            if (error) {
+              return {
+                success: false,
+                error: error.message,
+                table,
+              };
+            }
+
+            return {
+              success: true,
+              table,
+              message: `Row ${id} deleted from ${table}`,
             };
           } catch (err) {
             return {

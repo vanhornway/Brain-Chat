@@ -44,7 +44,7 @@ export async function checkTableAccess(
     if (operation === "read") {
       return data.can_read === true;
     }
-    if (operation === "write") {
+    if (operation === "write" || operation === "delete") {
       return data.can_write === true;
     }
 
@@ -84,7 +84,7 @@ export async function checkSubjectAccess(
     if (operation === "read") {
       return data.can_read === true;
     }
-    if (operation === "write") {
+    if (operation === "write" || operation === "delete") {
       return data.can_write === true;
     }
 
@@ -191,7 +191,7 @@ export const PERSONAL_ONLY_TABLES = new Set(["thoughts", "work_feelings"]);
 export async function checkAccessToTable(
   userId: string,
   tableName: string,
-  operation: "read" | "write",
+  operation: "read" | "write" | "delete",
   subject?: string // Required for subject-based tables
 ): Promise<{ allowed: boolean; reason?: string }> {
   // Personal tables: only own data

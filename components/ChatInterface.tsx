@@ -67,6 +67,14 @@ const SHORTCUTS = [
     prompt:
       "What is Nyel's current scout rank and progress toward Eagle? What badges does he still need?",
   },
+  {
+    id: "work-feelings",
+    label: "Log Work Feeling",
+    icon: "💼",
+    prompt: "",
+    isWorkFeeling: true,
+    umairOnly: true,
+  },
 ];
 
 export default function ChatInterface() {
@@ -219,13 +227,23 @@ export default function ChatInterface() {
     }
   }
 
-  function handleShortcut(prompt: string, isThought?: boolean) {
+  function handleShortcut(prompt: string, isThought?: boolean, isWorkFeeling?: boolean) {
     setShowShortcuts(false);
     if (isThought) {
       setInput("");
       setTimeout(() => {
         if (inputRef.current) {
           inputRef.current.placeholder = "Type your thought and send...";
+          inputRef.current.focus();
+        }
+      }, 50);
+      return;
+    }
+    if (isWorkFeeling) {
+      setInput("");
+      setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.placeholder = "Describe the event, how you felt, and how you reacted...";
           inputRef.current.focus();
         }
       }, 50);
@@ -607,10 +625,17 @@ export default function ChatInterface() {
             <div className="w-10 h-1 bg-surface-3 rounded-full mx-auto mb-4" />
             <h2 className="text-sm font-semibold text-text-primary mb-3 px-1">Quick Shortcuts</h2>
             <div className="space-y-2">
-              {SHORTCUTS.map((s) => (
+              {SHORTCUTS.filter((s) => {
+                // Filter out umairOnly shortcuts if not logged in as Umair
+                const isUmair = userEmail && userEmail.toLowerCase().includes("mumair");
+                if ((s as { umairOnly?: boolean }).umairOnly && !isUmair) {
+                  return false;
+                }
+                return true;
+              }).map((s) => (
                 <button
                   key={s.id}
-                  onClick={() => handleShortcut(s.prompt, (s as { isThought?: boolean }).isThought)}
+                  onClick={() => handleShortcut(s.prompt, (s as { isThought?: boolean }).isThought, (s as { isWorkFeeling?: boolean }).isWorkFeeling)}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl bg-surface-2 border border-border hover:bg-surface-3 hover:border-accent-light/30 transition-colors text-left"
                 >
                   <span className="text-xl">{s.icon}</span>

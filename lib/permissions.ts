@@ -180,7 +180,7 @@ export const TABLE_BASED_TABLES = new Set([
  * Tables that are personal/private to the authenticated user (no subject mapping)
  * User can only see their own data
  */
-export const PERSONAL_ONLY_TABLES = new Set(["thoughts"]);
+export const PERSONAL_ONLY_TABLES = new Set(["thoughts", "work_feelings"]);
 
 /**
  * Main permission check function

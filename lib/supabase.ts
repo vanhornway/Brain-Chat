@@ -64,6 +64,7 @@ export const KNOWN_TABLES = [
   "chat_sessions",
   "work_feelings",
   "travel_plans",
+  "accommodations",
 ] as const;
 
 export type KnownTable = (typeof KNOWN_TABLES)[number];
@@ -107,6 +108,7 @@ export const DATE_COLUMNS: Record<string, string[]> = {
   chat_sessions:        ["updated_at", "created_at"],
   work_feelings:        ["event_date", "created_at"],
   travel_plans:         ["start_date", "created_at"],
+  accommodations:       ["check_in_date", "created_at"],
 };
 
 // Key columns per table — helps the AI know what to filter/display
@@ -146,4 +148,5 @@ export const TABLE_SCHEMA: Record<string, string> = {
   chat_sessions:         "id, title, messages, provider, model_id, created_at, updated_at",
   work_feelings:         "id, event_date, event_description, feelings, reaction, category, intensity, tags, notes, created_at, updated_at",
   travel_plans:          "id, traveler_name, trip_type, travel_category, destination, start_date, end_date, description, budget, currency, status, tags, notes, created_at",
+  accommodations:        "id, accommodation_type, name, address, city, country, check_in_date, check_out_date, confirmation_number, total_cost, currency, cost_per_night, number_of_nights, rating, amenities, booking_platform, payment_method, notes, tags, created_at",
 };

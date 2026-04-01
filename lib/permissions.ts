@@ -174,6 +174,7 @@ export const TABLE_BASED_TABLES = new Set([
   "rental_expenses",
   "chat_sessions",
   "prompt_templates",
+  "travel_plans",
 ]);
 
 /**

@@ -183,7 +183,9 @@ export default function HikeTrackerUI() {
       setStep("review");
       setProcessingMessage("");
     } catch (err) {
-      alert(`Processing failed: ${(err as Error).message}`);
+      const errorMsg = (err as Error).message || "Unknown error";
+      console.error("[ProcessImages] Error:", err);
+      alert(`Processing failed: ${errorMsg}\n\nCheck browser console (F12) for details.`);
       setStep("upload");
     } finally {
       setLoading(false);

@@ -65,15 +65,24 @@ export async function detectFacesInImage(imageFile: File): Promise<
     throw new Error("Face detection only works in browser");
   }
 
+  console.log(`[FaceDetection] Processing image: ${imageFile.name}`);
+
   // Ensure face-api is loaded
   if (!modelsLoaded) {
+    console.log("[FaceDetection] Loading models...");
     await loadFaceModels();
+    console.log("[FaceDetection] Models loaded successfully");
   }
 
   // Get face-api from window
   const faceapi = (window as any).faceapi;
   if (!faceapi) {
     throw new Error("face-api.js not loaded");
+  }
+
+  // Check if models are loaded
+  if (!faceapi.nets.tinyFaceDetector.isLoaded()) {
+    throw new Error("Face detection models not loaded");
   }
 
   // Convert file to blob URL
@@ -83,24 +92,31 @@ export async function detectFacesInImage(imageFile: File): Promise<
     // Load image element
     const img = new Image();
     img.crossOrigin = "anonymous";
-    await new Promise((resolve, reject) => {
-      img.onload = resolve;
-      img.onerror = reject;
+
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error("Failed to load image"));
       img.src = imageUrl;
     });
 
+    console.log(`[FaceDetection] Image loaded: ${img.width}x${img.height}`);
+
     // Detect faces with descriptors (embeddings) using tinyFaceDetector
+    console.log("[FaceDetection] Running face detection...");
     const detections = await faceapi
       .detectAllFaces(img, new faceapi.TinyFaceDetectorOptions())
       .withFaceLandmarks()
       .withFaceDescriptors();
 
+    console.log(`[FaceDetection] Found ${detections.length} faces`);
+
     if (!detections || detections.length === 0) {
+      console.log("[FaceDetection] No faces detected in image");
       return [];
     }
 
     // Convert to our format
-    return detections.map((detection: any) => ({
+    const results = detections.map((detection: any) => ({
       embedding: Array.from(detection.descriptor), // Convert Float32Array to number[]
       confidence: detection.detection.score,
       detection: {
@@ -110,6 +126,12 @@ export async function detectFacesInImage(imageFile: File): Promise<
         height: Math.round(detection.detection.box.height),
       },
     }));
+
+    console.log(`[FaceDetection] Processed ${results.length} detections`);
+    return results;
+  } catch (err) {
+    console.error("[FaceDetection] Error processing image:", err);
+    throw err;
   } finally {
     URL.revokeObjectURL(imageUrl);
   }
@@ -133,17 +155,21 @@ export async function detectFacesInImages(imageFiles: File[]): Promise<
     }>;
   }>
 > {
+  console.log(`[FaceDetection] Processing ${imageFiles.length} images`);
   const results = [];
 
   for (const file of imageFiles) {
     try {
+      console.log(`[FaceDetection] Processing ${file.name}...`);
       const faces = await detectFacesInImage(file);
       results.push({ imageFile: file, faces });
+      console.log(`[FaceDetection] ${file.name}: Found ${faces.length} faces`);
     } catch (err) {
-      console.error(`Failed to process ${file.name}:`, err);
-      // Continue with next file
+      console.error(`[FaceDetection] Failed to process ${file.name}:`, err);
+      throw err; // Don't silently fail - bubble up the error
     }
   }
 
+  console.log(`[FaceDetection] Total results: ${results.length} images processed`);
   return results;
 }

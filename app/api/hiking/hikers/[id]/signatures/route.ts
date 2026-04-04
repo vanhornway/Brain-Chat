@@ -14,9 +14,10 @@ function getSupabase() {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const user = await getAuthenticatedUserOrThrow();
 
     // Check permission
@@ -32,7 +33,7 @@ export async function GET(
     const { data, error } = await supabase
       .from("face_signatures")
       .select("id, embedding, source, created_at")
-      .eq("hiker_id", params.id)
+      .eq("hiker_id", id)
       .eq("user_id", user.id);
 
     if (error) {

@@ -119,12 +119,16 @@ export default function HikeTrackerUI() {
   }
 
   async function processImages() {
+    console.log("[HikeTrackerUI] Starting processImages with", uploadedFiles.length, "files");
     try {
       setProcessingMessage("Loading face detection models...");
+      console.log("[HikeTrackerUI] About to call detectFacesInImages");
 
       // Detect faces in all images
       setProcessingMessage("Detecting faces in photos...");
+      console.log("[HikeTrackerUI] Calling detectFacesInImages...");
       const imageResults = await detectFacesInImages(uploadedFiles);
+      console.log("[HikeTrackerUI] detectFacesInImages returned:", imageResults);
 
       // Fetch stored face signatures
       setProcessingMessage("Fetching stored face signatures...");

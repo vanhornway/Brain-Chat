@@ -86,12 +86,15 @@ export default function HikeTrackerUI() {
   }
 
   async function handleUpload() {
+    console.log("[HikeTrackerUI] handleUpload called with", uploadedFiles.length, "files");
+
     if (!uploadedFiles.length) {
       alert("Select at least 1 photo");
       return;
     }
 
     setLoading(true);
+    console.log("[HikeTrackerUI] Uploading hike session...");
     try {
       const res = await fetch("/api/hiking/upload", {
         method: "POST",
@@ -109,10 +112,13 @@ export default function HikeTrackerUI() {
       }
 
       const data = await res.json();
+      console.log("[HikeTrackerUI] Session created:", data.hike_session.id);
       setSessionId(data.hike_session.id);
       setStep("processing");
+      console.log("[HikeTrackerUI] Step set to processing, calling processImages");
       await processImages();
     } catch (err) {
+      console.error("[HikeTrackerUI] Upload error:", err);
       alert(`Upload failed: ${(err as Error).message}`);
       setLoading(false);
     }
@@ -188,7 +194,8 @@ export default function HikeTrackerUI() {
       setProcessingMessage("");
     } catch (err) {
       const errorMsg = (err as Error).message || "Unknown error";
-      console.error("[ProcessImages] Error:", err);
+      console.error("[HikeTrackerUI] processImages Error:", err);
+      console.error("[HikeTrackerUI] Error stack:", (err as Error).stack);
       alert(`Processing failed: ${errorMsg}\n\nCheck browser console (F12) for details.`);
       setStep("upload");
     } finally {

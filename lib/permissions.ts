@@ -176,6 +176,11 @@ export const TABLE_BASED_TABLES = new Set([
   "prompt_templates",
   "travel_plans",
   "accommodations",
+  "hikers",
+  "face_signatures",
+  "trails",
+  "hike_sessions",
+  "attendance",
 ]);
 
 /**

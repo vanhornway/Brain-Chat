@@ -65,6 +65,11 @@ export const KNOWN_TABLES = [
   "work_feelings",
   "travel_plans",
   "accommodations",
+  "hikers",
+  "face_signatures",
+  "trails",
+  "hike_sessions",
+  "attendance",
 ] as const;
 
 export type KnownTable = (typeof KNOWN_TABLES)[number];
@@ -109,6 +114,11 @@ export const DATE_COLUMNS: Record<string, string[]> = {
   work_feelings:        ["event_date", "created_at"],
   travel_plans:         ["start_date", "created_at"],
   accommodations:       ["check_in_date", "created_at"],
+  hikers:               ["created_at"],
+  face_signatures:      ["created_at"],
+  trails:               ["created_at"],
+  hike_sessions:        ["hike_date", "created_at"],
+  attendance:           ["created_at"],
 };
 
 // Key columns per table — helps the AI know what to filter/display
@@ -149,4 +159,9 @@ export const TABLE_SCHEMA: Record<string, string> = {
   work_feelings:         "id, event_date, event_description, feelings, reaction, category, intensity, tags, notes, created_at, updated_at",
   travel_plans:          "id, traveler_name, trip_type, travel_category, destination, start_date, end_date, description, budget, currency, status, tags, notes, created_at",
   accommodations:        "id, accommodation_type, name, address, city, country, check_in_date, check_out_date, confirmation_number, total_cost, currency, cost_per_night, number_of_nights, rating, amenities, booking_platform, payment_method, notes, tags, created_at",
+  hikers:                "id, user_id, name, face_trained, created_at, updated_at",
+  face_signatures:       "id, user_id, hiker_id, embedding, source, created_at",
+  trails:                "id, user_id, trail_name, alltrails_url, distance_miles, elevation_gain_ft, avg_duration_minutes, created_at",
+  hike_sessions:         "id, user_id, trail_id, hike_date, photo_count, notes, created_at",
+  attendance:            "id, user_id, hike_session_id, hiker_id, confirmation_status, confidence, created_at",
 };

@@ -12,8 +12,7 @@ export async function loadFaceModels() {
   if (modelsLoaded) return;
 
   try {
-    // Models are loaded from CDN by face-api.js
-    // They're automatically downloaded on first use
+    // Load the face-api.js library
     const script = document.createElement("script");
     script.src = "https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js";
     script.async = true;
@@ -24,10 +23,25 @@ export async function loadFaceModels() {
       document.head.appendChild(script);
     });
 
+    // Wait for face-api to be available on window
+    const faceapi = (window as any).faceapi;
+    if (!faceapi) {
+      throw new Error("face-api.js library loaded but not available");
+    }
+
+    // Load the ML models from CDN
+    const MODEL_URL = "https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights/";
+
+    await Promise.all([
+      faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+      faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+      faceapi.nets.faceDescriptorNet.loadFromUri(MODEL_URL),
+    ]);
+
     modelsLoaded = true;
   } catch (err) {
-    console.error("Failed to load face-api.js:", err);
-    throw new Error("Failed to load face detection models");
+    console.error("Failed to load face-api models:", err);
+    throw new Error(`Face detection models failed to load: ${(err as Error).message}`);
   }
 }
 
@@ -75,9 +89,9 @@ export async function detectFacesInImage(imageFile: File): Promise<
       img.src = imageUrl;
     });
 
-    // Detect faces with descriptors (embeddings)
+    // Detect faces with descriptors (embeddings) using tinyFaceDetector
     const detections = await faceapi
-      .detectAllFaces(img)
+      .detectAllFaces(img, new faceapi.TinyFaceDetectorOptions())
       .withFaceLandmarks()
       .withFaceDescriptors();
 

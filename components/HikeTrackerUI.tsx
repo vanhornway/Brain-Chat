@@ -125,68 +125,22 @@ export default function HikeTrackerUI() {
   }
 
   async function processImages() {
-    console.log("[HikeTrackerUI] Starting processImages with", uploadedFiles.length, "files");
+    console.log("[HikeTrackerUI] Starting processImages");
     try {
-      setProcessingMessage("Loading face detection models...");
-      console.log("[HikeTrackerUI] About to call detectFacesInImages");
+      setProcessingMessage("Preparing review...");
 
-      // Detect faces in all images
-      setProcessingMessage("Detecting faces in photos...");
-      console.log("[HikeTrackerUI] Calling detectFacesInImages...");
-      const imageResults = await detectFacesInImages(uploadedFiles);
-      console.log("[HikeTrackerUI] detectFacesInImages returned:", imageResults);
-
-      // Fetch stored face signatures
-      setProcessingMessage("Fetching stored face signatures...");
-      const signaturesRes = await fetch("/api/hiking/hikers");
-      if (!signaturesRes.ok) throw new Error("Failed to fetch hikers");
-
-      const { hikers: storedHikers } = await signaturesRes.json();
-
-      // Get face signatures for all hikers
-      const allSignatures: FaceSignature[] = [];
-      for (const hiker of storedHikers) {
-        const sigRes = await fetch(
-          `/api/hiking/hikers/${hiker.id}/signatures`
-        ).catch(() => null);
-
-        if (sigRes?.ok) {
-          const { signatures } = await sigRes.json();
-          signatures.forEach((sig: any) => {
-            allSignatures.push({
-              hiker_id: hiker.id,
-              hiker_name: hiker.name,
-              embedding: Array.isArray(sig.embedding)
-                ? sig.embedding
-                : JSON.parse(sig.embedding),
-            });
-          });
-        }
-      }
-
-      // Match detected faces to hikers
-      setProcessingMessage("Matching faces to hikers...");
+      // For now, skip face detection and go straight to manual assignment
+      // Users will manually select which hikers attended the hike
       const detected: DetectedFace[] = [];
-      let detectionId = 0;
 
-      for (const imageResult of imageResults) {
-        for (const face of imageResult.faces) {
-          const match = match_embedding(face.embedding, allSignatures, 0.6);
-          const alternatives = get_all_matches(face.embedding, allSignatures, 0.5);
-
-          detected.push({
-            detectionId: `face-${detectionId++}`,
-            embedding: face.embedding,
-            confidence: face.confidence,
-            matchedHikerId: match?.hiker_id,
-            matchedHikerName: match?.hiker_name,
-            matchConfidence: match?.confidence,
-            alternatives: alternatives.filter(
-              (alt) => alt.hiker_id !== match?.hiker_id
-            ),
-            status: match ? "auto_detected" : "manually_added",
-          });
-        }
+      // Create one "fake" detection per uploaded file so user can assign each
+      for (let i = 0; i < uploadedFiles.length; i++) {
+        detected.push({
+          detectionId: `photo-${i}`,
+          embedding: new Array(128).fill(0), // Placeholder embedding
+          confidence: 0,
+          status: "manually_added",
+        });
       }
 
       setDetectedFaces(detected);
@@ -195,8 +149,7 @@ export default function HikeTrackerUI() {
     } catch (err) {
       const errorMsg = (err as Error).message || "Unknown error";
       console.error("[HikeTrackerUI] processImages Error:", err);
-      console.error("[HikeTrackerUI] Error stack:", (err as Error).stack);
-      alert(`Processing failed: ${errorMsg}\n\nCheck browser console (F12) for details.`);
+      alert(`Processing failed: ${errorMsg}`);
       setStep("upload");
     } finally {
       setLoading(false);
@@ -448,10 +401,14 @@ export default function HikeTrackerUI() {
               Review Detections
             </h2>
 
+            <p className="mb-6 text-gray-700">
+              Select which hikers attended this {trails.find(t => t.id === trailId)?.trail_name || "hike"}:
+            </p>
+
             {detectedFaces.length === 0 ? (
-              <div className="p-6 bg-blue-50 border-l-4 border-blue-400">
+              <div className="p-6 bg-blue-50 border-l-4 border-blue-400 mb-8">
                 <p className="text-blue-900">
-                  No faces detected in the uploaded photos.
+                  No photos to assign. Upload photos first.
                 </p>
               </div>
             ) : (

@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
     );
 
     // Fallback: if RPC doesn't exist, query directly
-    let hikerLeaderboard = [];
+    let hikerLeaderboard: any[] = [];
     if (!leaderboardData) {
       const { data: hikers } = await supabase
         .from("hikers")
@@ -119,7 +119,7 @@ export async function GET(req: NextRequest) {
       .select("id, trail_name, distance_miles, elevation_gain_ft, avg_duration_minutes")
       .eq("user_id", user.id);
 
-    let trailAnalytics = [];
+    let trailAnalytics: any[] = [];
     if (trails) {
       trailAnalytics = await Promise.all(
         trails.map(async (trail) => {
